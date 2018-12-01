@@ -133,7 +133,6 @@ def check_on_driver(number='+12039182330'):
         )
     print(message.sid)
 
-
 def detect_accidents():
     global access
     global data_readings
@@ -193,6 +192,7 @@ def detect_weather():
     global access
     global APIKEY
     APIKEY = 'ad40ed71bf39847adcd100c62e212a68'
+    global weatherDescription
     while True:
         for user_id in list(access):
             token = access[user_id]["access_token"]
@@ -213,8 +213,24 @@ def detect_weather():
                 #     # This means something went wrong.
                 #     raise ApiErro
                 #r('GET /tasks/ {}'.format(resp.status_code))
-                wea = resp_weather.json()
-                print(wea)
+                weather = resp_weather.json()
+                weatherDescription = weather['weather'][0]['description']
+                weatherId = weather['weather'][0]['id']
+                print(weatherDescription)
+                if weatherId >= 200 and weatherId < 300 or weatherId >= 500 and weatherId < 800 :
+                    alert_weather_changes()
+
+def alert_weather_changes(number='+12039182330'):
+    """Send text to phone number about the weather"""
+    global weatherDescription
+
+    weathermessage = twilio_client.messages \
+        .create(
+        body="weather condition alert: {}".format(weatherDescription),
+        from_='+14752758132',
+        to=number
+    )
+    print(weathermessage.sid)
 
 if __name__ == '__main__':
     # check_on_driver()

@@ -2,6 +2,7 @@ import smartcar
 from flask import Flask, redirect, request, jsonify
 from flask_cors import CORS
 from config import *
+from send_sms import writeMess
 
 import time
 
@@ -76,12 +77,9 @@ def detect_accidents():
                 v1=(response_2-response_1)/0.05
                 v2=(response_3-response_2)/0.05
                 if(v2-v1>50):
-                    pass #I want to send the client a message to se if he is okay
+                    writeMess()
 
 if __name__ == '__main__':
     app.run(port=8000)
-<<<<<<< HEAD
+    writeMess()
     detect_accidents()
-=======
-    detect_accidents()
->>>>>>> 0bb527e5a6b851a288156b1928f0448a0cdaf9b2

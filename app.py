@@ -201,7 +201,9 @@ def detect_weather():
             for id in vehicle_ids:
                 vehicle = smartcar.Vehicle(id, token)
                 resp_location = vehicle.location()
+                vehicle_type = vehicle.info()['make']
                 print(resp_location)
+                print(vehicle_type)
                 #resp_location = vehicle.location()
                 lat = resp_location['data']['latitude']
                 print(lat, flush=True)
@@ -218,15 +220,15 @@ def detect_weather():
                 weatherId = weather['weather'][0]['id']
                 print(weatherDescription)
                 if weatherId >= 200 and weatherId < 300 or weatherId >= 500 and weatherId < 800 :
-                    alert_weather_changes()
+                    alert_weather_changes(vehicle_type)
 
-def alert_weather_changes(number='+12039182330'):
+def alert_weather_changes(vehicle_type, number='+12039182330'):
     """Send text to phone number about the weather"""
     global weatherDescription
 
     weathermessage = twilio_client.messages \
         .create(
-        body="weather condition alert: {}".format(weatherDescription),
+        body="weather condition alert: your {} is under {}".format(vehicle_type, weatherDescription),
         from_='+14752758132',
         to=number
     )

@@ -14,4 +14,6 @@
 1. Paste your smartcar info into `config.py`
 1. Put `http://localhost:8000/exchange` as the redirect URI on the smartcar console
 1. Run the server: `python app.py`
+1. Go to `localhost:8000/login` and register a vehicle
+1. Go to `localhost:8000/vehicle` to see your vehicle
 

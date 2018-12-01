@@ -2,7 +2,7 @@ import time
 import datetime
 import os
 from threading import Thread
-
+from twilio.twiml.messaging_response import MessagingResponse
 import smartcar
 from flask import Flask, redirect, request, jsonify
 from flask_cors import CORS
@@ -11,7 +11,11 @@ from config import *
 from send_sms import writeMess
 
 
+
 app = Flask(__name__)
+
+victims=[]
+
 CORS(app)
 
 # global variable to save our access_token
@@ -86,7 +90,18 @@ def data():
         result += f"vehicle: {vehicle_id}, data: {data}"
     return result
 
-
+@app.route("/sms",methods=["GET","POST"])    
+def handle_sms():
+    resp=""
+    getAns=request.values.get('Body',None)
+    if  getAns=='yes':
+        resp=MessagingResponse()
+        resp.message("Okay Cool!")
+    else:
+        victims.append(request.values.get("From"))
+   # print (victims)
+    print(str(getAns))
+    return str(resp)
 def detect_accidents():
     global access
     global data_readings
@@ -142,7 +157,7 @@ def detect_accidents():
                     }
                 print("\n")
 
-
+writeMess()
 if __name__ == "__main__":
     t = Thread(target=detect_accidents)
     t.start()

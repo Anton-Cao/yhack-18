@@ -93,10 +93,9 @@ def detect_accidents():
 
     print("detecting accidents")
     while True:
-        # if len(access) == 0: # no cars
-        #     time.sleep(1)
-        #     continue
-        time.sleep(1)
+        if len(access) == 0: # no cars
+            time.sleep(1)
+            continue
 
         for user_id in access:
             token = access[user_id]["access_token"]
@@ -123,8 +122,8 @@ def detect_accidents():
                         distance = odometer_reading - data_readings[vehicle_id]["odometer"] # kilometers
                         speed = (distance / time_elapsed) * 60 * 60 # kilometers per hour
                         prev_speed = data_readings[vehicle_id].get("speed")
+                        print(f"cur speed: {speed}, prev speed: {prev_speed}")
                         if prev_speed != None:
-                            print(f"cur speed: {speed}, prev speed: {prev_speed}")
                             if min(prev_speed, speed) < 0 or max(prev_speed, speed) > 200: # not real data
                                 print("test car, fake data")
                             elif prev_speed >= 80 and speed <= 10: # if decelerated from > 80km/h to < 10km/h, check if accident

@@ -80,4 +80,8 @@ def detect_accidents():
 
 if __name__ == '__main__':
     app.run(port=8000)
+<<<<<<< HEAD
     detect_accidents()
+=======
+    detect_accidents()
+>>>>>>> 0bb527e5a6b851a288156b1928f0448a0cdaf9b2

@@ -1,6 +1,5 @@
 import time
 import datetime
-import os
 from threading import Thread
 
 import smartcar
@@ -8,8 +7,10 @@ from flask import Flask, redirect, request, jsonify
 from flask_cors import CORS
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
-
 from config import *
+import json
+
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -27,8 +28,8 @@ client = smartcar.AuthClient(
     client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
     redirect_uri=REDIRECT_URI,
-    scope=["read_vehicle_info", "read_odometer"],
-    test_mode=TEST_MODE
+    scope=["read_vehicle_info", "read_odometer", 'read_location'],
+    test_mode=TEST_MODE,
 )
 
 twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
@@ -184,9 +185,43 @@ def detect_accidents():
                     }
                 print("\n")
 
+def detect_weather():
+    global access
+    global APIKEY
+    APIKEY = 'ad40ed71bf39847adcd100c62e212a68'
+    while True:
+        for user_id in list(access):
+            token = access[user_id]["access_token"]
+            vehicle_ids = smartcar.get_vehicle_ids(token)['vehicles']
 
-if __name__ == "__main__":
-    t = Thread(target=detect_accidents)
-    t.start()
-    app.run(port=8000, debug=True)
-    t.join()
+            for id in vehicle_ids:
+                vehicle = smartcar.Vehicle(id, token)
+                resp_location = vehicle.location()
+                print(resp_location)
+                #resp_location = vehicle.location()
+                lat = resp_location['data']['latitude']
+                print(lat, flush=True)
+                lon = resp_location['data']['longitude']
+                print(lon, flush=True)
+
+                resp_weather = requests.get('https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&APPID={}'.format(lat, lon, APIKEY))
+                # if resp.status_code != 200:
+                #     # This means something went wrong.
+                #     raise ApiErro
+                #r('GET /tasks/ {}'.format(resp.status_code))
+                wea = resp_weather.json()
+                print(wea)
+
+if __name__ == '__main__':
+    t1 = Thread(target=detect_accidents)
+    t1.start()
+    t2 = Thread(target=detect_weather)
+    t2.start()
+    app.run(port=8000)
+    # detect_weather()
+    t1.join()
+    t2.join()
+    # writeMess()
+    # detect_accidents()
+    # detect_weather()
+

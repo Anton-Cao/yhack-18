@@ -9,7 +9,7 @@ app = Flask(__name__)
 CORS(app)
 
 # global variable to save our access_token
-access = None
+access = {}
 
 client = smartcar.AuthClient(
     client_id=CLIENT_ID,
@@ -34,26 +34,28 @@ def exchange():
     global access
     # in a production app you'll want to store this in some kind of
     # persistent storage
-    access = client.exchange_code(code)
+
+    user_access = client.exchange_code(code)
+    user_id = smartcar.get_user_id(user_access["access_token"])
+    access[user_id] = user_access
+
     return '', 200
 
-
-@app.route('/vehicle', methods=['GET'])
-def vehicle():
-    # access our global variable to retrieve our access tokens
+@app.route('/vehicles', methods=['GET'])
+def vehicles():
     global access
-    # the list of vehicle ids
-    vehicle_ids = smartcar.get_vehicle_ids(
-        access['access_token'])['vehicles']
 
-    # instantiate the first vehicle in the vehicle id list
-    vehicle = smartcar.Vehicle(vehicle_ids[0], access['access_token'])
-
-    info = vehicle.info()
-    print(info)
-
-    return jsonify(info)
-
+    result = ""
+    for user_id in access:
+        result += f"user: {user_id}\n"
+        token = access[user_id]["access_token"]
+        vehicle_ids = smartcar.get_vehicle_ids(
+            token)['vehicles']
+    
+        for vehicle in [smartcar.Vehicle(id, token) for id in vehicle_ids]:
+            result += f"{vehicle.info()}\n"
+    return result
+    
 
 if __name__ == '__main__':
     app.run(port=8000)

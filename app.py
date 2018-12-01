@@ -3,6 +3,8 @@ from flask import Flask, redirect, request, jsonify
 from flask_cors import CORS
 from config import *
 
+import time
+
 import os
 
 app = Flask(__name__)
@@ -53,7 +55,25 @@ def vehicle():
     print(info)
 
     return jsonify(info)
+def accident():
+      # access our global variable to retrieve our access tokens
+    global access
+    # the list of vehicle ids
+    vehicle_ids = smartcar.get_vehicle_ids(access['access_token'])['vehicles']
 
+    # instantiate the first vehicle in the vehicle id list
+    vehicle = smartcar.Vehicle(vehicle_ids[0], access['access_token'])
+    
+    response_1= vehicle.odometer()
+    time.sleep(5)
+    response_2= vehicle.odometer()
+    time.sleep(5)
+    response_3= vehicle.odometer()
+    v1=(response_2-response_1)/0.05
+    v2=(response_3-response_2)/0.05
+    if(v2-v1>50)
+        #I want to send the client a message to se if he is okay
+    
 
 if __name__ == '__main__':
     app.run(port=8000)

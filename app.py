@@ -107,23 +107,27 @@ def handle_sms():
     ans = request.values.get("Body", None)
     number = request.values.get("From", None)
     resp = MessagingResponse()
-    if ans == "yes":
-        victims = [pair for pair in victims if victims[0] != number] # remove from victims list
+    if ans.lower() in ["yes", "yep", "ye", "y"]:
+        victims = [victim for victim in victims if victim["number"] != number] # remove from victims list
         resp.message("Okay Cool!")
     else:
         resp.message("Help is on the way.")
-    return resp
+    return str(resp)
 
 
 def check_on_driver(number='+12039182330'):
     """Send text to phone number to check if driver is ok"""
     global victims
 
-    victims.append((number, datetime.datetime.now())) # add victim to watch list
+    # add victim to watch list
+    victims.append({
+        "number": number,
+        "time": datetime.datetime.now()
+    })
 
     message = twilio_client.messages \
         .create(
-            body="Are you okay?",
+            body="Are you okay? Please respond with yes or no.",
             from_='+14752758132',
             to=number
         )
@@ -213,15 +217,12 @@ def detect_weather():
                 print(wea)
 
 if __name__ == '__main__':
+    # check_on_driver()
     t1 = Thread(target=detect_accidents)
     t1.start()
     t2 = Thread(target=detect_weather)
     t2.start()
     app.run(port=8000)
-    # detect_weather()
     t1.join()
     t2.join()
-    # writeMess()
-    # detect_accidents()
-    # detect_weather()
 

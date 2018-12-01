@@ -3,7 +3,7 @@ import datetime
 from threading import Thread
 
 import smartcar
-from flask import Flask, redirect, request, jsonify
+from flask import Flask, redirect, request, jsonify, send_from_directory
 from flask_cors import CORS
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
@@ -12,7 +12,7 @@ import json
 
 import requests
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="client")
 CORS(app)
 
 # global variable to save our access_token
@@ -36,8 +36,11 @@ twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
 @app.route("/", methods=["GET"])
 def home():
-    return redirect("/login")
+    return app.send_static_file("Yhacks.html")
 
+@app.route("/<path:path>", methods=["GET"])
+def serve_file(path):
+    return send_from_directory("client", path)
 
 @app.route("/login", methods=["GET"])
 def login():

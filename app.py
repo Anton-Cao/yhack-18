@@ -58,25 +58,26 @@ def vehicles():
             result += f"{vehicle.info()}\n"
     return result
 
-def accident():
+def detect_accidents():
     # access our global variable to retrieve our access tokens
     global access
 
-    for user_id in access:
-        token = access[user_id]["access_token"]
-        vehicle_ids = smartcar.get_vehicle_ids(
-            token)['vehicles']
-        for vehicle in [smartcar.Vehicle(id, token) for id in vehicle_ids]:
-            response_1= vehicle.odometer()
-            time.sleep(5)
-            response_2= vehicle.odometer()
-            time.sleep(5)
-            response_3= vehicle.odometer()
-            v1=(response_2-response_1)/0.05
-            v2=(response_3-response_2)/0.05
-            if(v2-v1>50):
-                pass #I want to send the client a message to se if he is okay
-                
+    while True:
+        for user_id in access:
+            token = access[user_id]["access_token"]
+            vehicle_ids = smartcar.get_vehicle_ids(
+                token)['vehicles']
+            for vehicle in [smartcar.Vehicle(id, token) for id in vehicle_ids]:
+                response_1= vehicle.odometer()
+                time.sleep(5)
+                response_2= vehicle.odometer()
+                time.sleep(5)
+                response_3= vehicle.odometer()
+                v1=(response_2-response_1)/0.05
+                v2=(response_3-response_2)/0.05
+                if(v2-v1>50):
+                    pass #I want to send the client a message to se if he is okay
 
 if __name__ == '__main__':
     app.run(port=8000)
+    detect_accidents()

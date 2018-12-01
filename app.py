@@ -2,20 +2,16 @@ import time
 import datetime
 import os
 from threading import Thread
-from twilio.twiml.messaging_response import MessagingResponse
+
 import smartcar
 from flask import Flask, redirect, request, jsonify
 from flask_cors import CORS
+from twilio.rest import Client
+from twilio.twiml.messaging_response import MessagingResponse
 
 from config import *
-from send_sms import writeMess
-
-
 
 app = Flask(__name__)
-
-victims=[]
-
 CORS(app)
 
 # global variable to save our access_token
@@ -23,6 +19,9 @@ access = {}
 
 # data about each vehicle
 data_readings = {}
+
+# list of phone numbers of potential victims
+victims = []
 
 client = smartcar.AuthClient(
     client_id=CLIENT_ID,
@@ -32,6 +31,7 @@ client = smartcar.AuthClient(
     test_mode=TEST_MODE
 )
 
+twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
 @app.route("/", methods=["GET"])
 def home():
@@ -46,12 +46,9 @@ def login():
 
 @app.route("/exchange", methods=["GET"])
 def exchange():
-    code = request.args.get("code")
-
-    # access our global variable and store our access tokens
     global access
-    # in a production app you"ll want to store this in some kind of
-    # persistent storage
+
+    code = request.args.get("code")
 
     user_access = client.exchange_code(code)
     user_id = smartcar.get_user_id(user_access["access_token"])
@@ -64,15 +61,18 @@ def exchange():
 def vehicles():
     global access
 
-    result = ""
+    result = "<ul>"
     for user_id in access:
-        result += f"user: {user_id}\n"
+        result += f"<li>user: {user_id}</li>"
         token = access[user_id]["access_token"]
         vehicle_ids = smartcar.get_vehicle_ids(
             token)["vehicles"]
     
+        result += "<ul>"
         for vehicle in [smartcar.Vehicle(vehicle_id, token) for vehicle_id in vehicle_ids]:
-            result += f"{vehicle.info()}\n"
+            result += f"<li>{vehicle.info()}</li>"
+        result += "</ul>"
+    result += "</ul>"
     return result
 
 
@@ -81,27 +81,54 @@ def data():
     global access
     global data_readings
 
-    return str(access) + str(data_readings)
-
-    print(data_readings)
-
-    result = ""
+    result = "<ul>"
     for vehicle_id, data in data_readings.items():
-        result += f"vehicle: {vehicle_id}, data: {data}"
+        result += f"<li>vehicle: {vehicle_id}, data: {data}</li>"
+    result += "</ul>"
     return result
 
-@app.route("/sms",methods=["GET","POST"])    
+
+@app.route("/victims", methods=["GET"])
+def show_victims():
+    global victims
+
+    result = "<ul>"
+    for number, time in victims:
+        result += f"<li>{number} {time}</li>"
+    result += "</ul>"
+    return result
+
+
+@app.route("/sms", methods=["GET","POST"])    
 def handle_sms():
-    resp=""
-    getAns=request.values.get('Body',None)
-    if  getAns=='yes':
-        resp=MessagingResponse()
+    global victims
+
+    ans = request.values.get("Body", None)
+    number = request.values.get("From", None)
+    resp = MessagingResponse()
+    if ans == "yes":
+        victims = [pair for pair in victims if victims[0] != number] # remove from victims list
         resp.message("Okay Cool!")
     else:
-        victims.append(request.values.get("From"))
-   # print (victims)
-    print(str(getAns))
-    return str(resp)
+        resp.message("Help is on the way.")
+    return resp
+
+
+def check_on_driver(number='+12039182330'):
+    """Send text to phone number to check if driver is ok"""
+    global victims
+
+    victims.append((number, datetime.datetime.now())) # add victim to watch list
+
+    message = twilio_client.messages \
+        .create(
+            body="Are you okay?",
+            from_='+14752758132',
+            to=number
+        )
+    print(message.sid)
+
+
 def detect_accidents():
     global access
     global data_readings
@@ -120,8 +147,8 @@ def detect_accidents():
                 print(f"vehicle id: {vehicle_id}")
                 vehicle = smartcar.Vehicle(vehicle_id, token)
                 odometer_data = vehicle.odometer()
-                odometer_reading = odometer_data['data']['distance']
-                measurement_time = odometer_data['age']
+                odometer_reading = odometer_data["data"]["distance"]
+                measurement_time = odometer_data["age"]
                 print(f"odometer: {odometer_reading}, time: {measurement_time}")
 
                 if vehicle_id in data_readings and "time" in data_readings[vehicle_id]:
@@ -143,7 +170,7 @@ def detect_accidents():
                                 print("test car, fake data")
                             elif prev_speed >= 80 and speed <= 10: # if decelerated from > 80km/h to < 10km/h, check if accident
                                 print("accident warning")
-                                writeMess()
+                                check_on_driver()
                         data_readings[vehicle_id] = {
                             "odometer": odometer_reading,
                             "time": measurement_time,
@@ -157,7 +184,7 @@ def detect_accidents():
                     }
                 print("\n")
 
-writeMess()
+
 if __name__ == "__main__":
     t = Thread(target=detect_accidents)
     t.start()

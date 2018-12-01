@@ -25,8 +25,13 @@ client = smartcar.AuthClient(
     client_secret=CLIENT_SECRET,
     redirect_uri=REDIRECT_URI,
     scope=["read_vehicle_info", "read_odometer"],
-    test_mode=True
+    test_mode=TEST_MODE
 )
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return redirect("/login")
 
 
 @app.route("/login", methods=["GET"])
@@ -88,6 +93,9 @@ def detect_accidents():
 
     print("detecting accidents")
     while True:
+        # if len(access) == 0: # no cars
+        #     time.sleep(1)
+        #     continue
         time.sleep(1)
 
         for user_id in access:
@@ -139,5 +147,5 @@ def detect_accidents():
 if __name__ == "__main__":
     t = Thread(target=detect_accidents)
     t.start()
-    app.run(port=8000, debug=True, use_reloader=False)
+    app.run(port=8000, debug=True)
     t.join()

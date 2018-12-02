@@ -4,3 +4,4 @@ db/
 .vscode
 .DS_Store
 config.py
+.idea/

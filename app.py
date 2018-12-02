@@ -187,7 +187,7 @@ def get_vehicles():
 
 @app.route("/accidents", methods=["GET"])
 def accidents():
-    return jsonify([["ford model t", {"latitude": 5, "longitude": 5}, datetime.datetime.now()]])
+    return jsonify([["ford model t", {"latitude": 5, "longitude": 5}, datetime.datetime.now()], ["ford model s", {"latitude": 8, "longitude": 5}, datetime.datetime.now()]])
 
 @app.route("/data", methods=["GET"])
 def data():

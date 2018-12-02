@@ -3,7 +3,7 @@ import datetime
 from threading import Thread
 
 import smartcar
-from flask import Flask, redirect, request, jsonify
+from flask import Flask, redirect, request, jsonify, send_from_directory, session
 from flask_cors import CORS
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
@@ -12,7 +12,8 @@ import json
 
 import requests
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="client")
+app.secret_key = "not secret"
 CORS(app)
 
 # global variable to save our access_token
@@ -23,6 +24,9 @@ data_readings = {}
 
 # list of phone numbers of potential victims
 victims = []
+
+# stores email, password, phone number, and uid's of registered users
+users = {}
 
 client = smartcar.AuthClient(
     client_id=CLIENT_ID,
@@ -36,14 +40,84 @@ twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
 @app.route("/", methods=["GET"])
 def home():
-    return redirect("/login")
+    return app.send_static_file("Yhacks.html")
 
+@app.route("/<path:path>", methods=["GET"])
+def serve_file(path):
+    return send_from_directory("client", path)
+
+@app.route("/register", methods=["GET"])
+def register():
+    global users
+
+    email = request.args.get("email")
+    if email in users:
+        return "user with email already exists", 500
+    psw = request.args.get("psw")
+    psw_repeat = request.args.get("psw-repeat")
+    if psw != psw_repeat:
+        return "passwords do not match", 500
+    phone = request.args.get("phone")
+
+    users[email] = {
+        "psw": psw,
+        "phone": phone,
+        "uids": []
+    }
+
+    session["email"] = email
+    session["phone"] = phone
+
+    return redirect("/")
 
 @app.route("/login", methods=["GET"])
 def login():
-    auth_url = client.get_auth_url()
-    return redirect(auth_url)
+    global users
 
+    email = request.args.get("email")
+    psw = request.args.get("psw")
+
+    if email not in users or users[email].get("psw") != psw:
+        return "incorrect password"
+    else:
+        session["email"] = email
+        session["phone"] = users[email].get("phone")
+        return redirect("/")
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    session.clear()
+    return redirect("/")
+
+@app.route("/whoami", methods=["GET"])
+def whoami():
+    if "email" not in session:
+        return "not logged in"
+    result = "<h1>Email</h1>"
+    result += f"<p>{session.get('email')}</p>"
+    result += "<h1>Phone number</h1>"
+    result += f"<p>{session.get('phone')}</p>"
+    result += "<h1>UIDs</h1>"
+    result += "<ul>" 
+    for user_id in users[session.get('email')].get('uids'):
+        result += f"<li>{user_id}</li>"
+        token = access[user_id]["access_token"]
+        vehicle_ids = smartcar.get_vehicle_ids(
+            token)["vehicles"]
+        result += "<ul>"
+        for vehicle_id in vehicle_ids:
+            result += f"<li>{vehicle_id}</li>"
+        result += "</ul>"
+    result += "</ul>"
+    return result
+
+@app.route("/register_vehicle", methods=["GET"])
+def register_vehicle():
+    if "email" in session:
+        auth_url = client.get_auth_url()
+        return redirect(auth_url)
+    else:
+        return redirect("/signin.html")
 
 @app.route("/exchange", methods=["GET"])
 def exchange():
@@ -55,6 +129,7 @@ def exchange():
     user_id = smartcar.get_user_id(user_access["access_token"])
     access[user_id] = user_access
 
+    users[session.get("email")].get("uids").append(user_id)
     return "", 200
 
 
@@ -76,6 +151,13 @@ def vehicles():
     result += "</ul>"
     return result
 
+@app.route("/my_vehicles", methods=["GET"])
+def get_vehicles():
+    return jsonify(["tesla model X", "ford model t"])
+
+@app.route("/accidents", methods=["GET"])
+def accidents():
+    return jsonify([["ford model t", {"latitude": 5, "longitude": 5}, datetime.datetime.now()]])
 
 @app.route("/data", methods=["GET"])
 def data():
@@ -94,8 +176,8 @@ def show_victims():
     global victims
 
     result = "<ul>"
-    for number, time in victims:
-        result += f"<li>{number} {time}</li>"
+    for phone, time in victims:
+        result += f"<li>{phone} {time}</li>"
     result += "</ul>"
     return result
 
@@ -108,7 +190,7 @@ def handle_sms():
     number = request.values.get("From", None)
     resp = MessagingResponse()
     if ans.lower() in ["yes", "yep", "ye", "y"]:
-        victims = [victim for victim in victims if victim["number"] != number] # remove from victims list
+        victims = [victim for victim in victims if victim["phone"] != number] # remove from victims list
         resp.message("Okay Cool!")
     else:
         resp.message("Help is on the way.")
@@ -121,7 +203,7 @@ def check_on_driver(number='+12039182330'):
 
     # add victim to watch list
     victims.append({
-        "number": number,
+        "phone": number,
         "time": datetime.datetime.now()
     })
 
@@ -132,7 +214,6 @@ def check_on_driver(number='+12039182330'):
             to=number
         )
     print(message.sid)
-
 
 def detect_accidents():
     global access
@@ -193,6 +274,7 @@ def detect_weather():
     global access
     global APIKEY
     APIKEY = 'ad40ed71bf39847adcd100c62e212a68'
+    global weatherDescription
     while True:
         for user_id in list(access):
             token = access[user_id]["access_token"]
@@ -201,7 +283,9 @@ def detect_weather():
             for id in vehicle_ids:
                 vehicle = smartcar.Vehicle(id, token)
                 resp_location = vehicle.location()
+                vehicle_type = vehicle.info()['make']
                 print(resp_location)
+                print(vehicle_type)
                 #resp_location = vehicle.location()
                 lat = resp_location['data']['latitude']
                 print(lat, flush=True)
@@ -213,16 +297,32 @@ def detect_weather():
                 #     # This means something went wrong.
                 #     raise ApiErro
                 #r('GET /tasks/ {}'.format(resp.status_code))
-                wea = resp_weather.json()
-                print(wea)
+                weather = resp_weather.json()
+                weatherDescription = weather['weather'][0]['description']
+                weatherId = weather['weather'][0]['id']
+                print(weatherDescription)
+                if weatherId >= 200 and weatherId < 300 or weatherId >= 500 and weatherId < 800 :
+                    alert_weather_changes(vehicle_type)
+
+def alert_weather_changes(vehicle_type, number='+12039182330'):
+    """Send text to phone number about the weather"""
+    global weatherDescription
+
+    weathermessage = twilio_client.messages \
+        .create(
+        body="weather condition alert: your {} is under {}".format(vehicle_type, weatherDescription),
+        from_='+14752758132',
+        to=number
+    )
+    print(weathermessage.sid)
 
 if __name__ == '__main__':
     # check_on_driver()
-    t1 = Thread(target=detect_accidents)
-    t1.start()
-    t2 = Thread(target=detect_weather)
-    t2.start()
+    # t1 = Thread(target=detect_accidents)
+    # t1.start()
+    # t2 = Thread(target=detect_weather)
+    # t2.start()
     app.run(port=8000)
-    t1.join()
-    t2.join()
+    # t1.join()
+    # t2.join()
 

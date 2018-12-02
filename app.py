@@ -89,7 +89,7 @@ def register():
     session["email"] = email
     session["phone"] = phone
 
-    return redirect("/")
+    return redirect("/home.html")
 
 @app.route("/login", methods=["GET"])
 def login():
@@ -103,7 +103,7 @@ def login():
     else:
         session["email"] = email
         session["phone"] = user.get("phone")
-        return redirect("/")
+        return redirect("/home.html")
 
 @app.route("/logout", methods=["GET"])
 def logout():
@@ -162,7 +162,7 @@ def exchange():
     uids = user.get("uids")
     uids.append(user_id)
     db.users.update_one({"email": email}, {"$set": {"uids" : uids}})
-    return "", 200
+    return redirect("/home.html")
 
 
 @app.route("/vehicles", methods=["GET"])
@@ -189,14 +189,15 @@ def vehicles():
 def get_vehicles():
     return jsonify(["tesla model X", "ford model t"])
 
-@app.route("/accidents", methods=["GET"])
+@app.route("/accidents2", methods=["GET"])
 def accidents():
     return jsonify([["ford model t", {"latitude": 5, "longitude": 5}, datetime.datetime.now()], ["ford model s", {"latitude": 8, "longitude": 5}, datetime.datetime.now()]])
 
-@app.route("/accidents2", methods=["GET"])
+@app.route("/accidents", methods=["GET"])
 def get_accidents():
     global victims
 
+    print(victims)
     result = []
     for victim in victims:
         result.append([
@@ -250,10 +251,11 @@ def detect_accidents():
 
     print("detecting accidents")
     while True:
-        time.sleep(10)
+        time.sleep(3)
 
         for user_id in get_all_uids():
-            user = db.users.find_one({"uid": user_id})
+            user = db.users.find_one({"uids": user_id})
+
             token = get_token(user_id)
             vehicle_ids = smartcar.get_vehicle_ids(
                 token)["vehicles"]
@@ -282,9 +284,10 @@ def detect_accidents():
                         prev_speed = data_readings[vehicle_id].get("speed")
                         print(f"cur speed: {speed}, prev speed: {prev_speed}")
                         if prev_speed != None:
-                            if min(prev_speed, speed) < 0 or max(prev_speed, speed) > 200: # not real data
-                                print("test car, fake data")
-                            elif prev_speed >= 80 and speed <= 10: # if decelerated from > 80km/h to < 10km/h, check if accident
+                            #if min(prev_speed, speed) < 0 or max(prev_speed, speed) > 200: # not real data
+                            #    print("test car, fake data")
+                            #elif prev_speed >= 80 and speed <= 10: # if decelerated from > 80km/h to < 10km/h, check if accident
+                            if prev_speed >= 80 and speed <= 10:
                                 print("accident warning")
                                 victims.append({
                                     "phone": user.get("phone"),
@@ -357,9 +360,9 @@ if __name__ == '__main__':
     # check_on_driver()
     t1 = Thread(target=detect_accidents)
     t1.start()
-    t2 = Thread(target=detect_weather)
-    t2.start()
-    app.run(port=8000)
+#    t2 = Thread(target=detect_weather)
+#    t2.start()
+    app.run(port=8000, debug=True, use_reloader=False)
     t1.join()
-    t2.join()
+#    t2.join()
 

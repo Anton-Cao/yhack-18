@@ -26,7 +26,8 @@
             for (let key in results) {
                 temp = parseInt(key) + 1;
                 result = results[key];
-                document.getElementById("container").innerHTML += '<h2>Accident ' + temp + ':</h2>' + '<p>' + result[0] + ' ' + result[1]['latitude'] + ' ' + result[1]['longitude'] + ' ' + result[2] + ' </p>';
+                var map_link = "https://www.google.com/maps/search/?api=1&query=" + result[1]['latitude'] + "," + result[1]['longitude'];
+                document.getElementById("container").innerHTML += '<h2>Accident ' + temp + ':</h2>' + '<p>' + result[0] + ' ' + "<a target='_blank' href=" + map_link + ">" + result[1]['latitude'] + ' ' + result[1]['longitude'] + '</a> ' + result[2] + ' </p>';
                 console.log("vehicle model: ".concat(result[0]));
                 console.log("vehicle's location: (".concat(result[1]['latitude']).concat(", ").concat(result[1]['longitude']).concat(")"));
                 console.log("accident's time:  ".concat(result[2]));

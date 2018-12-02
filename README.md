@@ -13,7 +13,9 @@
 1. Run `cp config.base.py config.py`
 1. Paste your smartcar info into `config.py`
 1. Put `http://localhost:8000/exchange` as the redirect URI on the smartcar console
-1. Run the server: `python app.py`
-1. Go to `localhost:8000/login` and register a vehicle
-1. Go to `localhost:8000/vehicle` to see your vehicle
+1. Download MongoDB if you don't have it yet
+1. Run `chmod 755 run_db.sh`
+1. Run `./run_db.sh`
+1. Run the server in a different window: `python app.py`
+1. Go to `localhost:8000` and register for an account
 

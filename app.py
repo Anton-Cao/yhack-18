@@ -39,6 +39,7 @@ db = mongo_client.get_database()
 def get_token(user_id):
     access = db.access.find_one({"uid": user_id})
     if access:
+        print(f"{datetime.datetime.now()} {access.get('expires_on')}")
         if datetime.datetime.now() > access.get("expires_on"):
             new_access = smartcar_client.exchange_refresh_token(access.get("refresh_token"))
             new_access["expires_on"] = datetime.datetime.now() + datetime.timedelta(seconds=new_access.get("expires_in"))
@@ -49,7 +50,10 @@ def get_token(user_id):
     return None
 
 def get_all_uids():
-    user_ids = db.access.find({}, {"uid": 1})
+    accesses = db.access.find({})
+    user_ids = []
+    for access in accesses:
+        user_ids.append(access.get("uid"))
     print(user_ids)
     return user_ids
 
@@ -189,6 +193,19 @@ def get_vehicles():
 def accidents():
     return jsonify([["ford model t", {"latitude": 5, "longitude": 5}, datetime.datetime.now()], ["ford model s", {"latitude": 8, "longitude": 5}, datetime.datetime.now()]])
 
+@app.route("/accidents2", methods=["GET"])
+def get_accidents():
+    global victims
+
+    result = []
+    for victim in victims:
+        result.append([
+            victim.get("car"),
+            victim.get("location"),
+            victim.get("time")
+        ])
+    return jsonify(result)
+
 @app.route("/data", methods=["GET"])
 def data():
     global data_readings
@@ -196,17 +213,6 @@ def data():
     result = "<ul>"
     for vehicle_id, data in data_readings.items():
         result += f"<li>vehicle: {vehicle_id}, data: {data}</li>"
-    result += "</ul>"
-    return result
-
-
-@app.route("/victims", methods=["GET"])
-def show_victims():
-    global victims
-
-    result = "<ul>"
-    for phone, time in victims:
-        result += f"<li>{phone} {time}</li>"
     result += "</ul>"
     return result
 
@@ -230,12 +236,6 @@ def check_on_driver(number='+12039182330'):
     """Send text to phone number to check if driver is ok"""
     global victims
 
-    # add victim to watch list
-    victims.append({
-        "phone": number,
-        "time": datetime.datetime.now()
-    })
-
     message = twilio_client.messages \
         .create(
             body="Are you okay? Please respond with yes or no.",
@@ -246,18 +246,22 @@ def check_on_driver(number='+12039182330'):
 
 def detect_accidents():
     global data_readings
+    global victims
 
     print("detecting accidents")
     while True:
-        time.sleep(1)
+        time.sleep(10)
 
         for user_id in get_all_uids():
+            user = db.users.find_one({"uid": user_id})
             token = get_token(user_id)
             vehicle_ids = smartcar.get_vehicle_ids(
                 token)["vehicles"]
             for vehicle_id in vehicle_ids:
                 print(f"vehicle id: {vehicle_id}")
                 vehicle = smartcar.Vehicle(vehicle_id, token)
+                vehicle_info = vehicle.info()
+                vehicle_location = vehicle.location()["data"]
                 odometer_data = vehicle.odometer()
                 odometer_reading = odometer_data["data"]["distance"]
                 measurement_time = odometer_data["age"]
@@ -266,7 +270,7 @@ def detect_accidents():
                 if vehicle_id in data_readings and "time" in data_readings[vehicle_id]:
                     # time since last measurement in seconds
                     time_elapsed = (measurement_time - data_readings[vehicle_id]["time"]) / datetime.timedelta(seconds=1)
-                    if time_elapsed >= 10: # if measurement was a long time ago (> 10 seconds), reset
+                    if time_elapsed >= 30: # if measurement was a long time ago (> 10 seconds), reset
                         data_readings[vehicle_id] = {
                             "odometer": odometer_reading,
                             "time": measurement_time,
@@ -282,6 +286,12 @@ def detect_accidents():
                                 print("test car, fake data")
                             elif prev_speed >= 80 and speed <= 10: # if decelerated from > 80km/h to < 10km/h, check if accident
                                 print("accident warning")
+                                victims.append({
+                                    "phone": user.get("phone"),
+                                    "car": f"{vehicle_info.get('make')} {vehicle_info.get('model')}",
+                                    "location": vehicle_location,
+                                    "time": datetime.datetime.now(),
+                                })
                                 check_on_driver()
                         data_readings[vehicle_id] = {
                             "odometer": odometer_reading,
@@ -301,6 +311,8 @@ def detect_weather():
     APIKEY = 'ad40ed71bf39847adcd100c62e212a68'
     global weatherDescription
     while True:
+        time.sleep(10)
+        
         for user_id in get_all_uids():
             token = get_token(user_id)
             vehicle_ids = smartcar.get_vehicle_ids(token)['vehicles']
@@ -343,11 +355,11 @@ def alert_weather_changes(vehicle_type, number='+12039182330'):
 
 if __name__ == '__main__':
     # check_on_driver()
-    # t1 = Thread(target=detect_accidents)
-    # t1.start()
-    # t2 = Thread(target=detect_weather)
-    # t2.start()
+    t1 = Thread(target=detect_accidents)
+    t1.start()
+    t2 = Thread(target=detect_weather)
+    t2.start()
     app.run(port=8000)
-    # t1.join()
-    # t2.join()
+    t1.join()
+    t2.join()
 

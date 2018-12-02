@@ -17,9 +17,6 @@ app = Flask(__name__, static_folder="client")
 app.secret_key = "not secret"
 CORS(app)
 
-# global variable to save our access_token
-access = {}
-
 # data about each vehicle
 data_readings = {}
 
@@ -38,6 +35,23 @@ twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client.get_database()
+
+def get_token(user_id):
+    access = db.access.find_one({"uid": user_id})
+    if access:
+        if datetime.datetime.now() > access.get("expires_on"):
+            new_access = smartcar_client.exchange_refresh_token(access.get("refresh_token"))
+            new_access["expires_on"] = datetime.datetime.now() + datetime.timedelta(seconds=new_access.get("expires_in"))
+            db.access.update_one({"uid": user_id}, {"$set": new_access})
+            return new_access.get("access_token")
+        else:
+            return access.get("access_token")
+    return None
+
+def get_all_uids():
+    user_ids = db.access.find({}, {"uid": 1})
+    print(user_ids)
+    return user_ids
 
 @app.route("/", methods=["GET"])
 def home():
@@ -107,7 +121,7 @@ def whoami():
     result += "<ul>" 
     for user_id in user.get('uids'):
         result += f"<li>{user_id}</li>"
-        token = access[user_id]["access_token"]
+        token = get_token(user_id)
         vehicle_ids = smartcar.get_vehicle_ids(
             token)["vehicles"]
         result += "<ul>"
@@ -127,7 +141,6 @@ def register_vehicle():
 
 @app.route("/exchange", methods=["GET"])
 def exchange():
-    global access
 
     email = session.get("email")
     if not email:
@@ -138,8 +151,8 @@ def exchange():
     user_access = smartcar_client.exchange_code(code)
     user_id = smartcar.get_user_id(user_access["access_token"])
     user_access["uid"] = user_id
+    user_access["expires_on"] = datetime.datetime.now() + datetime.timedelta(seconds=user_access["expires_in"])
     db.access.insert_one(user_access)
-    access[user_id] = user_access
 
     user = db.users.find_one({"email": email})
     uids = user.get("uids")
@@ -150,8 +163,6 @@ def exchange():
 
 @app.route("/vehicles", methods=["GET"])
 def vehicles():
-    global access
-    
     if "email" not in session:
         return "not logged in"
     email = session.get("email")
@@ -161,33 +172,14 @@ def vehicles():
     vehicles = []
 
     for user_id in uids:
-        token = access[user_id]["access_token"]
+        token = get_token(user_id)
         vehicle_ids = smartcar.get_vehicle_ids(
             token)["vehicles"]
     
         for vehicle in [smartcar.Vehicle(vehicle_id, token) for vehicle_id in vehicle_ids]:
             vehicle_info = vehicle.info()
-            print(vehicle_info)
             vehicles.append(f"{vehicle_info['make']} {vehicle_info['model']}")
-    return vehicles
-
-#@app.route("/vehicles", methods=["GET"])
-#def vehicles():
-#    global access
-#
-#    result = "<ul>"
-#    for user_id in access:
-#        result += f"<li>user: {user_id}</li>"
-#        token = access[user_id]["access_token"]
-#        vehicle_ids = smartcar.get_vehicle_ids(
-#            token)["vehicles"]
-#    
-#        result += "<ul>"
-#        for vehicle in [smartcar.Vehicle(vehicle_id, token) for vehicle_id in vehicle_ids]:
-#            result += f"<li>{vehicle.info()}</li>"
-#        result += "</ul>"
-#    result += "</ul>"
-#    return result
+    return jsonify(vehicles)
 
 @app.route("/my_vehicles", methods=["GET"])
 def get_vehicles():
@@ -199,7 +191,6 @@ def accidents():
 
 @app.route("/data", methods=["GET"])
 def data():
-    global access
     global data_readings
 
     result = "<ul>"
@@ -254,17 +245,14 @@ def check_on_driver(number='+12039182330'):
     print(message.sid)
 
 def detect_accidents():
-    global access
     global data_readings
 
     print("detecting accidents")
     while True:
-        if len(access) == 0: # no cars
-            time.sleep(1)
-            continue
+        time.sleep(1)
 
-        for user_id in access:
-            token = access[user_id]["access_token"]
+        for user_id in get_all_uids():
+            token = get_token(user_id)
             vehicle_ids = smartcar.get_vehicle_ids(
                 token)["vehicles"]
             for vehicle_id in vehicle_ids:
@@ -309,13 +297,12 @@ def detect_accidents():
                 print("\n")
 
 def detect_weather():
-    global access
     global APIKEY
     APIKEY = 'ad40ed71bf39847adcd100c62e212a68'
     global weatherDescription
     while True:
-        for user_id in list(access):
-            token = access[user_id]["access_token"]
+        for user_id in get_all_uids():
+            token = get_token(user_id)
             vehicle_ids = smartcar.get_vehicle_ids(token)['vehicles']
 
             for id in vehicle_ids:

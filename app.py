@@ -151,6 +151,13 @@ def vehicles():
     result += "</ul>"
     return result
 
+@app.route("/my_vehicles", methods=["GET"])
+def get_vehicles():
+    return jsonify(["tesla model X", "ford model t"])
+
+@app.route("/accidents", methods=["GET"])
+def accidents():
+    return jsonify([["ford model t", {"latitude": 5, "longitude": 5}, datetime.datetime.now()]])
 
 @app.route("/data", methods=["GET"])
 def data():
